@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="ko">
 <head>
+ <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2563eb">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -269,36 +270,42 @@ a:hover { text-decoration: underline; }
       return dataList;
   }
 
-  /* ================= DB 초기화 ================= */
-  const dbName = 'SalesDataDB_IDLOOK_Final'; 
-  let dbInstance = null;
 
-  function getDB() {
-    return new Promise((resolve, reject) => {
-      if (dbInstance) { resolve(dbInstance); return; }
-      const request = indexedDB.open(dbName, 1);
-      request.onupgradeneeded = (e) => {
-        const d = e.target.result;
-        if (!d.objectStoreNames.contains('salesData')) {
-            d.createObjectStore('salesData', { autoIncrement: true });
-        }
-      };
-      request.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
-      request.onerror = (e) => { reject(e); };
-    });
+/* ================= [교체] Supabase 클라우드 DB 연동 설정 ================= */
+  const SUPABASE_URL = "https://nxvwnaascyaawpmlmafz.supabase.co/rest/v1/"; // 본인의 Project URL 붙여넣기
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54dnduYWFzY3lhYXdwbWxtYWZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzNzU2MTQsImV4cCI6MjA5NTk1MTYxNH0.YMTTN5m6ViOu9sR1PgxS1jf9VQzvnqeHRF2oHyD_q0I"; // 본인의 anon/public 키 붙여넣기
+  const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // 로컬 IndexedDB 대신 클라우드 서버에서 전체 데이터를 받아오는 함수
+  async function getAllData() {
+      const { data, error } = await _supabase
+          .from('sales_data')
+          .select('*')
+          .order('day', { ascending: false });
+          
+      if (error) {
+          console.error("데이터 로딩 실패:", error);
+          return [];
+      }
+      
+      // 대시보드 기존 코드(대문자 기준 필드명)와의 호환성을 위해 키값을 대문자로 변환
+      return data.map(row => {
+          const upperRow = {};
+          for (let key in row) {
+              upperRow[key.toUpperCase()] = row[key];
+          }
+          return upperRow;
+      });
   }
 
-  async function clearStore() { 
-      const db = await getDB();
-      return new Promise(r => { let tx = db.transaction('salesData', 'readwrite'); tx.objectStore('salesData').clear(); tx.oncomplete = r; }); 
-  }
-  async function putData(dataArr) { 
-      const db = await getDB();
-      return new Promise(r => { let tx = db.transaction('salesData', 'readwrite'); let store = tx.objectStore('salesData'); dataArr.forEach(i => store.put(i)); tx.oncomplete = r; }); 
-  }
-  async function getAllData() { 
-      const db = await getDB();
-      return new Promise(r => { let tx = db.transaction('salesData', 'readonly'); let req = tx.objectStore('salesData').getAll(); req.onsuccess = e => r(e.target.result); }); 
+  // 데이터 전체 초기화 (서버 데이터 전체 삭제)
+  async function clearStore() {
+      const { error } = await _supabase
+          .from('sales_data')
+          .delete()
+          .neq('id', 0); // 모든 행 삭제 조건
+          
+      if (error) alert("서버 초기화 실패: " + error.message);
   }
 
   /* ================= CSV 파서 ================= */
@@ -351,7 +358,7 @@ a:hover { text-decoration: underline; }
     } catch(e) { console.error(e); }
   }
 
-  /* ================= 데이터 병합(업데이트) 로직 ================= */
+  /* ================= [교체] 클라우드 서버로 데이터 업로드 및 갱신 ================= */
   document.getElementById('btnProcess').addEventListener('click', async () => {
     const fTotal = document.getElementById('fileTotal').files[0];
     const fMonth = document.getElementById('fileMonth').files[0];
@@ -362,59 +369,67 @@ a:hover { text-decoration: underline; }
     await new Promise(resolve => setTimeout(resolve, 100));
 
     try {
-      let existingData = await getAllData();
-      let dataMap = new Map();
-      existingData.forEach(row => {
-          let key = (row.ORD_NO && row.ORD_SEQ) ? row.ORD_NO + "_" + row.ORD_SEQ : "TEMP_" + Math.random();
-          dataMap.set(key, row);
-      });
-
       const readAndParse = async (file) => {
          let text = await new Promise(r => { const rd = new FileReader(); rd.onload = e => r(e.target.result); rd.readAsText(file, 'euc-kr'); });
-         if(text.includes('')) {
+         if(!text || text.includes('')) {
              text = await new Promise(r => { const rd = new FileReader(); rd.onload = e => r(e.target.result); rd.readAsText(file, 'utf-8'); });
          }
          return parseCSV(text);
       };
       
-      if(fTotal) {
-          let parsedTotal = await readAndParse(fTotal);
-          parsedTotal.forEach(row => {
-              let key = (row.ORD_NO && row.ORD_SEQ) ? row.ORD_NO + "_" + row.ORD_SEQ : "TEMP_" + Math.random();
-              dataMap.set(key, row); 
-          });
-      }
-
-      if(fMonth) {
-          let parsedMonth = await readAndParse(fMonth);
-          parsedMonth.forEach(row => {
-              let key = (row.ORD_NO && row.ORD_SEQ) ? row.ORD_NO + "_" + row.ORD_SEQ : "TEMP_" + Math.random();
-              dataMap.set(key, row); 
-          });
-      }
+      let parsedRows = [];
+      if(fTotal) parsedRows = parsedRows.concat(await readAndParse(fTotal));
+      if(fMonth) parsedRows = parsedRows.concat(await readAndParse(fMonth));
       
-      let combined = Array.from(dataMap.values());
-      
-      if(combined.length === 0) {
-          alert('데이터를 분석할 수 없습니다. 원본 CSV 파일의 형태를 확인해주세요.');
+      if(parsedRows.length === 0) {
+          alert('분석할 데이터가 없습니다.');
           document.getElementById('loadingOverlay').style.display = 'none';
           return;
       }
 
-      await clearStore();
-      await putData(combined);
+      // Supabase 데이터베이스 컬럼명(소문자)에 맞게 데이터 가공 및 정제
+      const databaseRows = parsedRows.map(row => ({
+          ord_no: row.ORD_NO || null,
+          ord_seq: row.ORD_SEQ || null,
+          day: row.DAY || null,
+          month: row.MONTH || null,
+          brand: row.BRAND || '기타',
+          prod_ord_chnl: row.PROD_ORD_CHNL || '기타',
+          ord_time_grd: row.ORD_TIME_GRD || '기타',
+          act_pay_amt: Number(String(row.ACT_PAY_AMT || '0').replace(/,/g, '')) || 0,
+          ord_qty: Number(String(row.ORD_QTY || '0').replace(/,/g, '')) || 0,
+          mem_no: row.MEM_NO || null,
+          first_purch_type: row.FIRST_PURCH_TYPE || null,
+          p_cd: row.P_CD || row.PROD_CD || 'UNKNOWN',
+          prod_nm: row.PROD_NM || '미확인 상품',
+          rfnd_amt_cmplt: Math.abs(Number(String(row.RFND_AMT_CMPLT || '0').replace(/,/g, ''))) || 0,
+          cncl_cmplt_qty: Math.abs(Number(String(row.CNCL_CMPLT_QTY || '0').replace(/,/g, ''))) || 0,
+          rtn_cmplt_cmplt: Math.abs(Number(String(row.RTN_CMPLT_CMPLT || '0').replace(/,/g, ''))) || 0,
+          init_act_pay_amt: Number(String(row.INIT_ACT_PAY_AMT || '0').replace(/,/g, '')) || 0
+      }));
+
+      // 네트워크 부하를 줄이기 위해 500개씩 나누어서 서버에 업로드 (UPSERT 기능으로 중복 자동 갱신)
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < databaseRows.length; i += CHUNK_SIZE) {
+          const chunk = databaseRows.slice(i, i + CHUNK_SIZE);
+          const { error } = await _supabase
+              .from('sales_data')
+              .upsert(chunk, { onConflict: 'ord_no,ord_seq' }); // 중복 주문은 업데이트
+              
+          if (error) throw new Error(`서버 전송 중 오류 발생: ${error.message}`);
+      }
+
       cachedData = null; 
-      
       await updateDBStatusUI();
       document.getElementById('loadingOverlay').style.display = 'none';
-      alert('데이터 업데이트가 완료되었습니다!');
+      alert('클라우드 공유 서버에 데이터 업데이트가 완료되었습니다!');
 
     } catch(e) { 
       document.getElementById('loadingOverlay').style.display = 'none';
-      alert('데이터 병합 중 오류가 발생했습니다.\n' + e.message); 
+      alert('데이터 동기화 중 오류가 발생했습니다.\n' + e.message); 
     }
   });
-
+  
   document.getElementById('btnClearCache').addEventListener('click', async () => {
     if(confirm('모든 데이터를 삭제할까요? (완전 초기화 됩니다)')) { 
       await clearStore(); 
