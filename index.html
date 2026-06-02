@@ -1,0 +1,1174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta charset="utf-8" />
+<title>데이터 관리 & 매출 분석 대시보드</title>
+<style>
+:root { color-scheme: light; --c-new: #2563eb; --c-outlet: #d97706; --bg-new: #eff6ff; --bg-outlet: #fef3c7; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 18px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #f5f6fa; color: #1f2937; font-size: 13px; }
+h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.3px; }
+.sub { color: #6b7280; font-size: 12px; margin-bottom: 14px; }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+.card h2 { font-size: 15px; margin: 0 0 8px; color: #111827; letter-spacing: -0.2px; display: flex; justify-content: space-between; align-items: center;}
+
+/* 탭 네비게이션 */
+.tab-nav { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 2px solid #e5e7eb; flex-wrap: wrap; }
+.tab-btn { background: transparent; border: none; padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer; color: #6b7280; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab-btn.active { color: #2563eb; border-bottom: 2px solid #2563eb; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* 업로드 UI */
+.upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.upload-box { border: 1.5px dashed #cbd5e1; border-radius: 8px; padding: 16px; background: #fafafa; }
+.upload-box.loaded { border-color: #10b981; background: #f0fdf4; }
+.upload-box .title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.upload-box .desc, .upload-box .meta { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
+.controls-row { display: flex; gap: 8px; align-items: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #f1f5f9; }
+button { padding: 8px 14px; border: 1px solid #d1d5db; background: #fff; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600; }
+button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+/* 분석 UI */
+.filter-bar { background: #eff6ff; padding: 12px; border-radius: 8px; margin-bottom: 14px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap; border: 1px solid #bfdbfe; }
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-bar select { padding: 6px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; font-weight: bold;}
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.kpi-card { background: #fff; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.02);}
+.kpi-card .label { color: #6b7280; font-size: 12px; margin-bottom: 4px; }
+.kpi-card .value { font-size: 18px; font-weight: 700; color: #111827; margin-bottom: 4px;}
+.kpi-card .yoy { font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background:#f3f4f6; display:inline-block; }
+
+.analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.analysis-section { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; overflow-x: auto;}
+.analysis-section.full-width { grid-column: 1 / -1; }
+.analysis-section h3 { margin: 0 0 10px 0; font-size: 14px; color: #374151; padding-bottom: 8px; border-bottom: 1px solid #f3f4f6;}
+table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: right; min-width: 900px; }
+th, td { padding: 8px 6px; border-bottom: 1px solid #f3f4f6; }
+th { text-align: right; color: #6b7280; font-weight: 600; background: #f9fafb; white-space: nowrap;}
+th:first-child, td:first-child { text-align: left; font-weight: 600; color: #111827;}
+tr:hover { background: #f9fafb; }
+a { text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+#loadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; flex-direction: column; justify-content: center; align-items: center; }
+.spinner { border: 4px solid #f3f3f3; border-top: 4px solid #2563eb; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 15px;}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.loading-text { font-size: 16px; font-weight: bold; color: #2563eb; margin-bottom: 8px; }
+.loading-sub { font-size: 13px; color: #6b7280; }
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">데이터를 처리 중입니다...</div>
+  <div class="loading-sub">잠시만 기다려주세요.</div>
+</div>
+
+<h1>IDLOOK 고객 분석 대시보드</h1>
+<div class="sub">선택하신 특정 일자(당일) 및 특정 월의 실적, 반품/취소, 그리고 브랜드별 세부 실적을 분석합니다.</div>
+
+<div class="tab-nav" id="tabs">
+  <button class="tab-btn active" data-target="tab-data">📁 데이터 관리</button>
+  <button class="tab-btn" data-target="tab-daily">📊 전체 일별 실적</button>
+  <button class="tab-btn" data-target="tab-monthly">📅 전체 월별 실적</button>
+  <button class="tab-btn" data-target="tab-brand-daily">🛍️ 브랜드별 일별 실적</button>
+  <button class="tab-btn" data-target="tab-brand-monthly">🛍️ 브랜드별 월별 실적</button>
+  <button class="tab-btn" data-target="tab-return" style="color:#dc2626;">🔄 반품/취소 현황</button>
+</div>
+
+<div id="tab-data" class="tab-content active">
+  <div class="card">
+    <h2>데이터 업로드 (병합 및 자동 업데이트)</h2>
+    <div style="font-size:12px; color:#4b5563; margin-bottom:12px; background:#f8fafc; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
+       💡 <b>업데이트 안내</b>: 동일한 주문(<b>ORD_NO + ORD_SEQ</b>)은 자동으로 최신 데이터로 갱신됩니다.
+    </div>
+    <div class="upload-grid">
+      <div class="upload-box" id="boxTotal">
+        <div class="title">1. 전체 매출 (과거년도 포함 권장)</div>
+        <input type="file" id="fileTotal" accept=".csv" />
+        <div class="meta" id="metaTotal">선택된 파일 없음</div>
+      </div>
+      <div class="upload-box" id="boxMonth">
+        <div class="title">2. 당월 매출 (매일 갱신용)</div>
+        <input type="file" id="fileMonth" accept=".csv" />
+        <div class="meta" id="metaMonth">선택된 파일 없음</div>
+      </div>
+    </div>
+<div class="controls-row" style="flex-wrap: wrap;">
+       <button id="btnProcess" class="primary">📥 기존 데이터와 병합하여 업데이트</button>
+       <button id="btnClearCache" style="color:red; border-color:#fca5a5;">🗑️ DB 전체 초기화</button>
+       <span id="dbStatus" style="font-size:13px; margin-left:10px; font-weight:bold; color:#10b981;"></span>
+    </div>
+    
+    <div class="controls-row" style="margin-top: 10px; padding-top: 12px; border-top: 1px dashed #cbd5e1;">
+       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+           <span style="font-size:13px; font-weight:600; color:#4b5563;">CSV 다운로드 기간:</span>
+           <input type="date" id="dlStartDate" style="padding:6px; border:1px solid #cbd5e1; border-radius:4px; font-family:inherit;">
+           <span style="color:#6b7280; font-weight:bold;">~</span>
+           <input type="date" id="dlEndDate" style="padding:6px; border:1px solid #cbd5e1; border-radius:4px; font-family:inherit;">
+           <button id="btnDownloadCSV" style="color:#059669; border-color:#6ee7b7; margin-left:4px;">💾 지정 기간 데이터 다운로드</button>
+       </div>
+    </div>
+  </div>
+</div>
+
+<div id="tab-daily" class="tab-content">
+  <div class="filter-bar">
+    <div class="filter-group"><span>조회 대상일:</span><select id="dailyDatePicker"></select></div>
+    <div class="filter-group" style="margin-left:10px;">
+      <span>브랜드 필터:</span>
+      <select id="dailySmcpFilter">
+        <option value="ALL">전체 브랜드</option><option value="EXCLUDE">SMCP 제외</option><option value="ONLY">SMCP 포함 (SMCP만)</option>
+      </select>
+    </div>
+  </div>
+  
+  <div class="kpi-grid" id="dailyKpi">
+    <div class="kpi-card"><div class="label">조회일 총 매출(원)</div><div class="value" id="d-sales">0</div><div class="yoy" id="d-yoy">-</div></div>
+    <div class="kpi-card"><div class="label">조회일 판매 수량</div><div class="value" id="d-qty">0</div></div>
+    <div class="kpi-card"><div class="label">조회일 주문 고객수</div><div class="value" id="d-cust">0</div></div>
+    <div class="kpi-card"><div class="label">조회일 주문 건수</div><div class="value" id="d-ord">0</div></div>
+  </div>
+
+  <div class="analysis-grid">
+    <div class="analysis-section full-width"><h3>📅 최근 15일 실적 추이</h3><div id="d-tbl-trend"></div></div>
+    <div class="analysis-section"><h3>🏷️ 브랜드별 당일 실적</h3><div id="d-tbl-brand"></div></div>
+    <div class="analysis-section"><h3>📱 주문 채널별 당일 실적</h3><div id="d-tbl-channel"></div></div>
+    <div class="analysis-section full-width"><h3>💎 회원 등급별 당일 실적</h3><div id="d-tbl-grade"></div></div>
+    <div class="analysis-section"><h3>🏆 전체 베스트 상품 Top 10 (매출액 기준)</h3><div id="d-tbl-best-sales"></div></div>
+    <div class="analysis-section"><h3>🔥 전체 베스트 상품 Top 10 (판매수량 기준)</h3><div id="d-tbl-best-qty"></div></div>
+  </div>
+</div>
+
+<div id="tab-monthly" class="tab-content">
+  <div class="filter-bar">
+    <div class="filter-group"><span>조회 대상월:</span><select id="monthlyDatePicker"></select></div>
+    <div class="filter-group" style="margin-left:10px;">
+      <span>브랜드 필터:</span>
+      <select id="monthlySmcpFilter">
+        <option value="ALL">전체 브랜드</option><option value="EXCLUDE">SMCP 제외</option><option value="ONLY">SMCP 포함 (SMCP만)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="monthlyKpi">
+    <div class="kpi-card"><div class="label">월 총 매출(원)</div><div class="value" id="m-sales">0</div><div class="yoy" id="m-yoy">-</div></div>
+    <div class="kpi-card"><div class="label">월 판매 수량</div><div class="value" id="m-qty">0</div></div>
+    <div class="kpi-card"><div class="label">월 주문 고객수</div><div class="value" id="m-cust">0</div></div>
+    <div class="kpi-card"><div class="label">월 주문 건수</div><div class="value" id="m-ord">0</div></div>
+  </div>
+
+  <div class="analysis-grid">
+    <div class="analysis-section full-width"><h3>📅 최근 12개월 실적 추이</h3><div id="m-tbl-trend"></div></div>
+    <div class="analysis-section"><h3>🏷️ 브랜드별 월간 실적</h3><div id="m-tbl-brand"></div></div>
+    <div class="analysis-section"><h3>📱 주문 채널별 월간 실적</h3><div id="m-tbl-channel"></div></div>
+    <div class="analysis-section full-width"><h3>💎 회원 등급별 월간 실적</h3><div id="m-tbl-grade"></div></div>
+    <div class="analysis-section"><h3>🏆 전체 베스트 상품 Top 10 (매출액 기준)</h3><div id="m-tbl-best-sales"></div></div>
+    <div class="analysis-section"><h3>🔥 전체 베스트 상품 Top 10 (판매수량 기준)</h3><div id="m-tbl-best-qty"></div></div>
+  </div>
+</div>
+
+<div id="tab-brand-daily" class="tab-content">
+  <div class="filter-bar">
+    <div class="filter-group"><span>조회 대상일:</span><select id="bDailyDatePicker"></select></div>
+    <div class="filter-group" style="margin-left:10px;"><span>분석할 브랜드:</span><select id="bDailyBrandPicker"></select></div>
+  </div>
+  
+  <div class="analysis-grid">
+    <div class="analysis-section full-width"><h3>📅 [선택 브랜드] 최근 15일 실적 추이</h3><div id="bd-tbl-trend"></div></div>
+    <div class="analysis-section"><h3>📱 [선택 브랜드] 채널별 실적</h3><div id="bd-tbl-channel"></div></div>
+    <div class="analysis-section"><h3>💎 [선택 브랜드] 등급별 실적</h3><div id="bd-tbl-grade"></div></div>
+    <div class="analysis-section"><h3>🏆 베스트 상품 Top 10 (매출액 기준)</h3><div id="bd-tbl-best-sales"></div></div>
+    <div class="analysis-section"><h3>🔥 베스트 상품 Top 10 (판매수량 기준)</h3><div id="bd-tbl-best-qty"></div></div>
+  </div>
+</div>
+
+<div id="tab-brand-monthly" class="tab-content">
+  <div class="filter-bar">
+    <div class="filter-group"><span>조회 대상월:</span><select id="bMonthlyDatePicker"></select></div>
+    <div class="filter-group" style="margin-left:10px;"><span>분석할 브랜드:</span><select id="bMonthlyBrandPicker"></select></div>
+  </div>
+  
+  <div class="analysis-grid">
+    <div class="analysis-section full-width"><h3>📅 [선택 브랜드] 최근 12개월 실적 추이</h3><div id="bm-tbl-trend"></div></div>
+    <div class="analysis-section"><h3>📱 [선택 브랜드] 채널별 실적</h3><div id="bm-tbl-channel"></div></div>
+    <div class="analysis-section"><h3>💎 [선택 브랜드] 등급별 실적</h3><div id="bm-tbl-grade"></div></div>
+    <div class="analysis-section"><h3>🏆 베스트 상품 Top 10 (매출액 기준)</h3><div id="bm-tbl-best-sales"></div></div>
+    <div class="analysis-section"><h3>🔥 베스트 상품 Top 10 (판매수량 기준)</h3><div id="bm-tbl-best-qty"></div></div>
+  </div>
+</div>
+
+<div id="tab-return" class="tab-content">
+  <div class="filter-bar">
+    <div class="filter-group">
+      <span>조회 기준:</span>
+      <select id="returnViewMode">
+        <option value="DAILY">일별 (Daily)</option>
+        <option value="MONTHLY">월별 (Monthly)</option>
+      </select>
+    </div>
+    <div class="filter-group" style="margin-left:10px;">
+      <span>조회 일/월:</span>
+      <select id="returnDatePicker"></select>
+    </div>
+    <div class="filter-group" style="margin-left:10px;">
+      <span>브랜드 필터:</span>
+      <select id="returnBrandPicker">
+        <option value="ALL">전체 브랜드 (ALL)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="returnKpi">
+    <div class="kpi-card"><div class="label">반품/취소 금액(원)</div><div class="value" id="r-amt" style="color:#dc2626;">0</div><div class="yoy" id="r-yoy">-</div></div>
+    <div class="kpi-card"><div class="label">취소 수량</div><div class="value" id="r-cncl-qty">0</div></div>
+    <div class="kpi-card"><div class="label">반품 수량</div><div class="value" id="r-rtn-qty">0</div></div>
+    <div class="kpi-card"><div class="label">반품/취소 발생 고객수</div><div class="value" id="r-cust">0</div></div>
+  </div>
+
+  <div class="analysis-grid">
+    <div class="analysis-section full-width"><h3 id="r-tbl-trend-title">📅 반품/취소 추이</h3><div id="r-tbl-trend"></div></div>
+    <div class="analysis-section full-width"><h3>🏷️ 브랜드별 반품/취소 현황</h3><div id="r-tbl-brand"></div></div>
+    
+    <div class="analysis-section"><h3>💸 반품/취소 베스트 상품 (금액순 Top 10)</h3><div id="r-tbl-best-amt"></div></div>
+    <div class="analysis-section"><h3>📦 반품/취소 베스트 상품 (수량순 Top 10)</h3><div id="r-tbl-best-qty"></div></div>
+  </div>
+</div>
+
+<script>
+  /* ================= UI 상호작용 ================= */
+  ['fileTotal', 'fileMonth'].forEach(id => {
+      document.getElementById(id).addEventListener('change', function(e) {
+          const box = document.getElementById('box' + id.replace('file',''));
+          const meta = document.getElementById('meta' + id.replace('file',''));
+          if(e.target.files.length > 0) {
+              box.classList.add('loaded');
+              meta.textContent = `✅ 선택됨: ${e.target.files[0].name}`;
+          }
+      });
+  });
+
+  const SMCP_BRANDS = ['SANDRO', 'MAJE', 'SANDRO HOMME', 'CLAUDIE PIERLOT'];
+  function applySmcpFilter(dataList, filterMode) {
+      if (filterMode === 'EXCLUDE') {
+          return dataList.filter(d => {
+              const brandName = (d.BRAND || '').toUpperCase().trim();
+              return !SMCP_BRANDS.includes(brandName);
+          });
+      } else if (filterMode === 'ONLY') {
+          return dataList.filter(d => {
+              const brandName = (d.BRAND || '').toUpperCase().trim();
+              return SMCP_BRANDS.includes(brandName);
+          });
+      }
+      return dataList;
+  }
+
+  /* ================= DB 초기화 ================= */
+  const dbName = 'SalesDataDB_IDLOOK_Final'; 
+  let dbInstance = null;
+
+  function getDB() {
+    return new Promise((resolve, reject) => {
+      if (dbInstance) { resolve(dbInstance); return; }
+      const request = indexedDB.open(dbName, 1);
+      request.onupgradeneeded = (e) => {
+        const d = e.target.result;
+        if (!d.objectStoreNames.contains('salesData')) {
+            d.createObjectStore('salesData', { autoIncrement: true });
+        }
+      };
+      request.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
+      request.onerror = (e) => { reject(e); };
+    });
+  }
+
+  async function clearStore() { 
+      const db = await getDB();
+      return new Promise(r => { let tx = db.transaction('salesData', 'readwrite'); tx.objectStore('salesData').clear(); tx.oncomplete = r; }); 
+  }
+  async function putData(dataArr) { 
+      const db = await getDB();
+      return new Promise(r => { let tx = db.transaction('salesData', 'readwrite'); let store = tx.objectStore('salesData'); dataArr.forEach(i => store.put(i)); tx.oncomplete = r; }); 
+  }
+  async function getAllData() { 
+      const db = await getDB();
+      return new Promise(r => { let tx = db.transaction('salesData', 'readonly'); let req = tx.objectStore('salesData').getAll(); req.onsuccess = e => r(e.target.result); }); 
+  }
+
+  /* ================= CSV 파서 ================= */
+  function parseCSV(text) {
+    text = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const lines = text.split('\n').filter(l => l.trim() !== '');
+    if(lines.length === 0) return [];
+    
+    const parseLine = (str) => {
+      let arr = [], quote = false, col = '';
+      for (let i = 0; i < str.length; i++) {
+        let cc = str[i], nc = str[i+1];
+        if (cc === '"' && quote && nc === '"') { col += '"'; i++; continue; }
+        if (cc === '"') { quote = !quote; continue; }
+        if (cc === ',' && !quote) { arr.push(col.trim()); col = ''; continue; }
+        col += cc;
+      }
+      arr.push(col.trim()); 
+      return arr;
+    }
+    
+    const headers = parseLine(lines[0]).map(h => h.trim());
+    const res = [];
+    
+    for(let i = 1; i < lines.length; i++) {
+      let current = parseLine(lines[i]);
+      let obj = {};
+      headers.forEach((h, j) => {
+          if(h) obj[h] = current[j] ? current[j].trim() : '';
+      });
+      
+      if(obj.DAY && obj.DAY.length === 8 && !obj.MONTH) {
+          obj.MONTH = obj.DAY.substr(0, 6);
+      }
+
+      if(obj.DAY || obj.MONTH || obj.ORD_NO) {
+          res.push(obj);
+      }
+    }
+    return res;
+  }
+
+  let cachedData = null; 
+
+  async function updateDBStatusUI() {
+    try {
+        const data = await getAllData();
+        const cnt = data.length;
+        document.getElementById('dbStatus').textContent = cnt > 0 ? `🟢 로컬DB에 ${cnt.toLocaleString()}건의 데이터가 준비되어 있습니다.` : '🔴 저장된 데이터가 없습니다. 파일을 업로드 해주세요.';
+    } catch(e) { console.error(e); }
+  }
+
+  /* ================= 데이터 병합(업데이트) 로직 ================= */
+  document.getElementById('btnProcess').addEventListener('click', async () => {
+    const fTotal = document.getElementById('fileTotal').files[0];
+    const fMonth = document.getElementById('fileMonth').files[0];
+    
+    if(!fTotal && !fMonth) { alert('업로드할 파일을 하나 이상 선택해주세요.'); return; }
+    
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    try {
+      let existingData = await getAllData();
+      let dataMap = new Map();
+      existingData.forEach(row => {
+          let key = (row.ORD_NO && row.ORD_SEQ) ? row.ORD_NO + "_" + row.ORD_SEQ : "TEMP_" + Math.random();
+          dataMap.set(key, row);
+      });
+
+      const readAndParse = async (file) => {
+         let text = await new Promise(r => { const rd = new FileReader(); rd.onload = e => r(e.target.result); rd.readAsText(file, 'euc-kr'); });
+         if(text.includes('')) {
+             text = await new Promise(r => { const rd = new FileReader(); rd.onload = e => r(e.target.result); rd.readAsText(file, 'utf-8'); });
+         }
+         return parseCSV(text);
+      };
+      
+      if(fTotal) {
+          let parsedTotal = await readAndParse(fTotal);
+          parsedTotal.forEach(row => {
+              let key = (row.ORD_NO && row.ORD_SEQ) ? row.ORD_NO + "_" + row.ORD_SEQ : "TEMP_" + Math.random();
+              dataMap.set(key, row); 
+          });
+      }
+
+      if(fMonth) {
+          let parsedMonth = await readAndParse(fMonth);
+          parsedMonth.forEach(row => {
+              let key = (row.ORD_NO && row.ORD_SEQ) ? row.ORD_NO + "_" + row.ORD_SEQ : "TEMP_" + Math.random();
+              dataMap.set(key, row); 
+          });
+      }
+      
+      let combined = Array.from(dataMap.values());
+      
+      if(combined.length === 0) {
+          alert('데이터를 분석할 수 없습니다. 원본 CSV 파일의 형태를 확인해주세요.');
+          document.getElementById('loadingOverlay').style.display = 'none';
+          return;
+      }
+
+      await clearStore();
+      await putData(combined);
+      cachedData = null; 
+      
+      await updateDBStatusUI();
+      document.getElementById('loadingOverlay').style.display = 'none';
+      alert('데이터 업데이트가 완료되었습니다!');
+
+    } catch(e) { 
+      document.getElementById('loadingOverlay').style.display = 'none';
+      alert('데이터 병합 중 오류가 발생했습니다.\n' + e.message); 
+    }
+  });
+
+  document.getElementById('btnClearCache').addEventListener('click', async () => {
+    if(confirm('모든 데이터를 삭제할까요? (완전 초기화 됩니다)')) { 
+      await clearStore(); 
+      cachedData = null;
+      await updateDBStatusUI();
+      alert('초기화 되었습니다.'); 
+    }
+  });
+  /* ================= CSV 기간 필터링 다운로드 기능 ================= */
+  document.getElementById('btnDownloadCSV').addEventListener('click', async () => {
+    const startInput = document.getElementById('dlStartDate').value;
+    const endInput = document.getElementById('dlEndDate').value;
+
+    if (!startInput || !endInput) {
+        alert('다운로드할 시작일과 종료일을 모두 선택해주세요.');
+        return;
+    }
+
+    // Date input 값(YYYY-MM-DD)을 데이터의 DAY 컬럼 형식(YYYYMMDD)으로 변환
+    const startDay = startInput.replace(/-/g, '');
+    const endDay = endInput.replace(/-/g, '');
+
+    if (startDay > endDay) {
+        alert('시작일이 종료일보다 클 수 없습니다.');
+        return;
+    }
+
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    try {
+        const allData = await getAllData();
+        if (!allData || allData.length === 0) {
+            alert('DB에 저장된 데이터가 없습니다.');
+            document.getElementById('loadingOverlay').style.display = 'none';
+            return;
+        }
+
+        // 선택한 기간에 해당하는 데이터만 필터링 (DAY 기준)
+        const filteredData = allData.filter(row => {
+            if (!row.DAY) return false;
+            return row.DAY >= startDay && row.DAY <= endDay;
+        });
+
+        if (filteredData.length === 0) {
+            alert('선택하신 기간에 해당하는 데이터가 없습니다.');
+            document.getElementById('loadingOverlay').style.display = 'none';
+            return;
+        }
+
+        // 1. 헤더(컬럼명) 추출 (첫 번째 데이터의 Key 기준)
+        const headers = Object.keys(filteredData[0]);
+        const csvRows = [];
+        
+        // 2. CSV 헤더 행 추가
+        csvRows.push(headers.map(header => `"${header}"`).join(','));
+        
+        // 3. 데이터 행 추가
+        for (const row of filteredData) {
+            const values = headers.map(header => {
+                let val = row[header];
+                if (val === null || val === undefined) val = '';
+                val = String(val).replace(/"/g, '""'); // 따옴표 이스케이프
+                return `"${val}"`;
+            });
+            csvRows.push(values.join(','));
+        }
+        
+        // 4. BOM 추가 (엑셀 한글 깨짐 방지) 및 문자열 결합
+        const csvString = '\uFEFF' + csvRows.join('\n');
+        
+        // 5. 다운로드 실행
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        
+        // 파일명에 선택한 기간 명시 (예: IDLOOK_Sales_20230101_20230131.csv)
+        a.href = url;
+        a.download = `IDLOOK_Sales_${startDay}_${endDay}.csv`;
+        
+        document.body.appendChild(a);
+        a.click();
+        
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+    } catch (e) {
+        console.error(e);
+        alert('CSV 다운로드 중 오류가 발생했습니다.\n' + e.message);
+    } finally {
+        document.getElementById('loadingOverlay').style.display = 'none';
+    }
+  });
+
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      e.target.classList.add('active');
+      document.getElementById(e.target.dataset.target).classList.add('active');
+      
+      if(e.target.dataset.target !== 'tab-data') {
+          await renderAnalysis();
+      }
+    });
+  });
+
+  function getPastDateString(targetDayStr, daysToSubtract) {
+      if(!targetDayStr || targetDayStr.length !== 8) return targetDayStr;
+      const y = targetDayStr.substr(0,4), m = targetDayStr.substr(4,2), d = targetDayStr.substr(6,2);
+      const dt = new Date(`${y}-${m}-${d}`);
+      dt.setDate(dt.getDate() - daysToSubtract);
+      return `${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}${String(dt.getDate()).padStart(2,'0')}`;
+  }
+
+  function getPastMonthString(targetMonthStr, monthsToSubtract) {
+      if(!targetMonthStr || targetMonthStr.length !== 6) return targetMonthStr;
+      const y = parseInt(targetMonthStr.substr(0,4));
+      const m = parseInt(targetMonthStr.substr(4,2)) - 1;
+      const dt = new Date(y, m, 1);
+      dt.setMonth(dt.getMonth() - monthsToSubtract);
+      return `${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}`;
+  }
+
+  /* ================= 핵심 집계 로직 ================= */
+  function aggregateDataWithYoY(currData, prevData, currKeyFunc, prevKeyFunc) {
+      if(!prevKeyFunc) prevKeyFunc = currKeyFunc;
+      let result = {};
+      
+      currData.forEach(row => {
+          let k = currKeyFunc(row);
+          if(!k) return;
+          if(!result[k]) result[k] = { curr: {sales:0, qty:0, cust:new Set(), firstCust:new Set(), ord:new Set()}, prev: {sales:0} };
+          
+          let amt = Number(String(row.ACT_PAY_AMT || '0').replace(/,/g, '')) || 0;
+          let qty = Number(String(row.ORD_QTY || '0').replace(/,/g, '')) || 0;
+          result[k].curr.sales += amt;
+          result[k].curr.qty += qty;
+          
+          if(row.MEM_NO && row.MEM_NO.trim() !== '') {
+              result[k].curr.cust.add(row.MEM_NO);
+              if(row.FIRST_PURCH_TYPE && row.FIRST_PURCH_TYPE.trim() !== '') {
+                  result[k].curr.firstCust.add(row.MEM_NO);
+              }
+          }
+          if(row.ORD_NO && row.ORD_NO.trim() !== '') result[k].curr.ord.add(row.ORD_NO);
+      });
+
+      prevData.forEach(row => {
+          let k = prevKeyFunc(row);
+          if(!k) return;
+          if(!result[k]) result[k] = { curr: {sales:0, qty:0, cust:new Set(), firstCust:new Set(), ord:new Set()}, prev: {sales:0} };
+          let amt = Number(String(row.ACT_PAY_AMT || '0').replace(/,/g, '')) || 0;
+          result[k].prev.sales += amt;
+      });
+
+      return Object.keys(result).map(k => {
+          let c = result[k].curr;
+          let p = result[k].prev;
+          let cCust = c.cust.size;
+          let cFirstCust = c.firstCust.size;
+          let cOrd = c.ord.size;
+          
+          let unitPrice = c.qty > 0 ? c.sales / c.qty : 0;
+          let custPrice = cCust > 0 ? c.sales / cCust : 0;
+          let ordPrice = cOrd > 0 ? c.sales / cOrd : 0;
+          
+          let yoy = '-';
+          if(Math.abs(p.sales) > 0) yoy = ((c.sales - p.sales) / Math.abs(p.sales) * 100).toFixed(1);
+          else if(Math.abs(c.sales) > 0 && p.sales === 0) yoy = '100.0';
+
+          let firstCustRate = cCust > 0 ? ((cFirstCust / cCust) * 100).toFixed(1) : '0.0';
+
+          return { 
+              name: k, sales: c.sales, prev_sales: p.sales, yoy: yoy, qty: c.qty, 
+              cust: cCust, firstCust: cFirstCust, firstCustRate: firstCustRate,
+              ord: cOrd, unitPrice: Math.round(unitPrice), custPrice: Math.round(custPrice), ordPrice: Math.round(ordPrice) 
+          };
+      }); 
+  }
+
+ /* ================= [수정된] 반품/취소 전용 집계 로직 ================= */
+  function aggregateReturnData(currData, prevData, currKeyFunc, prevKeyFunc) {
+      if(!prevKeyFunc) prevKeyFunc = currKeyFunc;
+      let result = {};
+
+      currData.forEach(row => {
+          let k = currKeyFunc(row);
+          if(!k) return;
+          if(!result[k]) result[k] = { curr: {rfndAmt:0, cnclQty:0, rtnQty:0, cust:new Set(), sales:0}, prev: {rfndAmt:0, sales:0} };
+
+          let rAmt = Math.abs(Number(String(row.RFND_AMT_CMPLT || '0').replace(/,/g, '')) || 0);
+          let cQty = Math.abs(Number(String(row.CNCL_CMPLT_QTY || '0').replace(/,/g, '')) || 0);
+          let rQty = Math.abs(Number(String(row.RTN_CMPLT_CMPLT || '0').replace(/,/g, '')) || 0);
+          let sales = Number(String(row.INIT_ACT_PAY_AMT || '0').replace(/,/g, '')) || 0;
+
+          result[k].curr.rfndAmt += rAmt;
+          result[k].curr.cnclQty += cQty;
+          result[k].curr.rtnQty += rQty;
+          result[k].curr.sales += sales;
+
+          if((rAmt > 0 || cQty > 0 || rQty > 0) && row.MEM_NO && row.MEM_NO.trim() !== '') {
+              result[k].curr.cust.add(row.MEM_NO);
+          }
+      });
+
+      prevData.forEach(row => {
+          let k = prevKeyFunc(row);
+          if(!k) return;
+          if(!result[k]) result[k] = { curr: {rfndAmt:0, cnclQty:0, rtnQty:0, cust:new Set(), sales:0}, prev: {rfndAmt:0, sales:0} };
+          
+          let rAmt = Math.abs(Number(String(row.RFND_AMT_CMPLT || '0').replace(/,/g, '')) || 0);
+          let sales = Number(String(row.INIT_ACT_PAY_AMT || '0').replace(/,/g, '')) || 0;
+          result[k].prev.rfndAmt += rAmt;
+          result[k].prev.sales += sales;
+      });
+
+      return Object.keys(result).map(k => {
+          let c = result[k].curr;
+          let p = result[k].prev;
+          let cCust = c.cust.size;
+
+          let yoy = '-';
+          if(p.rfndAmt > 0) yoy = ((c.rfndAmt - p.rfndAmt) / p.rfndAmt * 100).toFixed(1);
+          else if(c.rfndAmt > 0 && p.rfndAmt === 0) yoy = '100.0';
+          
+          let rtnRate = (c.sales > 0) ? (c.rfndAmt / c.sales * 100).toFixed(2) : 0.0;
+
+          return {
+              name: k, rfndAmt: c.rfndAmt, prev_rfndAmt: p.rfndAmt,
+              yoy: yoy, cnclQty: c.cnclQty, rtnQty: c.rtnQty, cust: cCust, 
+              sales: c.sales, rtnRate: rtnRate
+          };
+      }); 
+  }
+
+  function buildTableHTML(aggData, labelName) {
+      if(aggData.length === 0) return `<div style="padding:20px; text-align:center; color:#9ca3af; font-weight:bold;">해당 조건의 데이터가 없습니다.</div>`;
+      
+      const totalSales = aggData.reduce((sum, row) => sum + row.sales, 0);
+
+      let html = `<table><thead><tr>
+          <th>${labelName}</th>
+          <th>매출액(원)</th>
+          <th>비중(%)</th>
+          <th>전년비(%)</th>
+          <th>판매수량</th>
+          <th>주문고객수</th>
+          <th>첫구매 고객수</th>
+          <th>첫구매율(%)</th>
+          <th>주문건수</th>
+          <th>1개당 단가(원)</th>
+          <th>고객단가(원)</th>
+          <th>건단가(원)</th>
+        </tr></thead><tbody>`;
+      
+      aggData.forEach(row => {
+          let yoyColor = '#6b7280';
+          let yoyText = '-';
+          if(row.yoy !== '-') {
+             let val = Number(row.yoy);
+             if(val > 0) { yoyColor = '#dc2626'; yoyText = '▲ ' + val + '%'; }
+             else if(val < 0) { yoyColor = '#2563eb'; yoyText = '▼ ' + Math.abs(val) + '%'; }
+             else { yoyText = '0%'; }
+          }
+          if(row.sales === 0 && row.prev_sales === 0) return;
+
+          let portion = '0.0%';
+          if (Math.abs(totalSales) > 0) { portion = ((row.sales / Math.abs(totalSales)) * 100).toFixed(1) + '%'; }
+
+          html += `<tr>
+            <td style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;" title="${row.name}">${row.name}</td>
+            <td>${row.sales.toLocaleString()}</td>
+            <td style="color:#6366f1; font-weight:bold;">${portion}</td>
+            <td style="color:${yoyColor}; font-weight:bold;">${yoyText}</td>
+            <td>${row.qty.toLocaleString()}</td>
+            <td>${row.cust.toLocaleString()}</td>
+            <td>${row.firstCust.toLocaleString()}</td>
+            <td style="color:#10b981; font-weight:bold;">${row.firstCustRate}%</td>
+            <td>${row.ord.toLocaleString()}</td>
+            <td>${row.unitPrice.toLocaleString()}</td>
+            <td>${row.custPrice.toLocaleString()}</td>
+            <td>${row.ordPrice.toLocaleString()}</td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+      return html;
+  }
+
+  function buildProductTableHTML(aggData, labelName) {
+      if(aggData.length === 0) return `<div style="padding:20px; text-align:center; color:#9ca3af; font-weight:bold;">해당 조건의 데이터가 없습니다.</div>`;
+      
+      const totalSales = aggData.reduce((sum, row) => sum + row.sales, 0);
+
+      let html = `<table><thead><tr>
+          <th>${labelName}</th>
+          <th>매출액(원)</th>
+          <th>비중(%)</th>
+          <th>전년비(%)</th>
+          <th>판매수량</th>
+          <th>주문고객수</th>
+          <th>첫구매 고객수</th>
+          <th>첫구매율(%)</th>
+          <th>주문건수</th>
+          <th>1개당 단가(원)</th>
+          <th>고객단가(원)</th>
+          <th>건단가(원)</th>
+        </tr></thead><tbody>`;
+      
+      aggData.forEach(row => {
+          let yoyColor = '#6b7280';
+          let yoyText = '-';
+          if(row.yoy !== '-') {
+             let val = Number(row.yoy);
+             if(val > 0) { yoyColor = '#dc2626'; yoyText = '▲ ' + val + '%'; }
+             else if(val < 0) { yoyColor = '#2563eb'; yoyText = '▼ ' + Math.abs(val) + '%'; }
+             else { yoyText = '0%'; }
+          }
+          if(row.sales === 0 && row.prev_sales === 0) return;
+
+          let portion = '0.0%';
+          if (Math.abs(totalSales) > 0) { portion = ((row.sales / Math.abs(totalSales)) * 100).toFixed(1) + '%'; }
+
+          let parts = row.name.split('||');
+          let pcd = parts[0];
+          let pnm = parts[1] || parts[0]; 
+
+          let nameHTML = pnm;
+          if(pcd && pcd !== 'UNKNOWN') {
+              nameHTML = `<a href="https://www.idlookmall.com/product/productDetail?pcode=${pcd}" target="_blank" style="color:#2563eb; font-weight:bold;" title="클릭 시 상품 상세 페이지로 이동">${pnm}</a>`;
+          }
+
+          html += `<tr>
+            <td style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;">${nameHTML}</td>
+            <td>${row.sales.toLocaleString()}</td>
+            <td style="color:#6366f1; font-weight:bold;">${portion}</td>
+            <td style="color:${yoyColor}; font-weight:bold;">${yoyText}</td>
+            <td>${row.qty.toLocaleString()}</td>
+            <td>${row.cust.toLocaleString()}</td>
+            <td>${row.firstCust.toLocaleString()}</td>
+            <td style="color:#10b981; font-weight:bold;">${row.firstCustRate}%</td>
+            <td>${row.ord.toLocaleString()}</td>
+            <td>${row.unitPrice.toLocaleString()}</td>
+            <td>${row.custPrice.toLocaleString()}</td>
+            <td>${row.ordPrice.toLocaleString()}</td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+      return html;
+  }
+
+ /* ================= [수정된] 반품/취소 테이블 생성 ================= */
+  function buildReturnTableHTML(aggData, labelName, isProduct = false) {
+      const validData = aggData.filter(item => item.rfndAmt > 0 || item.cnclQty > 0 || item.rtnQty > 0);
+      if(validData.length === 0) return `<div style="padding:20px; text-align:center; color:#9ca3af; font-weight:bold;">해당 조건의 반품/취소 데이터가 없습니다.</div>`;
+
+      const totalAmt = validData.reduce((sum, row) => sum + row.rfndAmt, 0);
+
+      let html = `<table><thead><tr>
+          <th>${labelName}</th>
+          <th>반품/취소금액(원)</th>
+          <th>반품/취소율(%)</th>
+          <th>금액 비중(%)</th>
+          <th>전년비(%)</th>
+          <th>취소 수량</th>
+          <th>반품 수량</th>
+          <th>반품/취소 고객수</th>
+        </tr></thead><tbody>`;
+
+      validData.forEach(row => {
+          let yoyColor = '#6b7280';
+          let yoyText = '-';
+          if(row.yoy !== '-') {
+             let val = Number(row.yoy);
+             if(val > 0) { yoyColor = '#dc2626'; yoyText = '▲ ' + val + '%'; }
+             else if(val < 0) { yoyColor = '#2563eb'; yoyText = '▼ ' + Math.abs(val) + '%'; }
+             else { yoyText = '0%'; }
+          }
+
+          let portion = '0.0%';
+          if (totalAmt > 0) { portion = ((row.rfndAmt / totalAmt) * 100).toFixed(1) + '%'; }
+
+          let nameHTML = row.name;
+          if(isProduct) {
+              let parts = row.name.split('||');
+              let pcd = parts[0];
+              let pnm = parts[1] || parts[0]; 
+              nameHTML = pnm;
+              if(pcd && pcd !== 'UNKNOWN') {
+                  nameHTML = `<a href="https://www.idlookmall.com/product/productDetail?pcode=${pcd}" target="_blank" style="color:#2563eb; font-weight:bold;">${pnm}</a>`;
+              }
+          }
+
+          html += `<tr>
+            <td style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px;">${nameHTML}</td>
+            <td style="color:#dc2626; font-weight:bold;">${row.rfndAmt.toLocaleString()}</td>
+            <td style="color:#9333ea; font-weight:bold;">${row.rtnRate}%</td>
+            <td>${portion}</td>
+            <td style="color:${yoyColor}; font-weight:bold;">${yoyText}</td>
+            <td>${row.cnclQty.toLocaleString()}</td>
+            <td>${row.rtnQty.toLocaleString()}</td>
+            <td>${row.cust.toLocaleString()}</td>
+          </tr>`;
+      });
+      html += `</tbody></table>`;
+      return html;
+  }
+
+  function updateKPI(prefix, totalAgg) {
+      document.getElementById(`${prefix}-sales`).textContent = totalAgg.sales.toLocaleString();
+      document.getElementById(`${prefix}-qty`).textContent = totalAgg.qty.toLocaleString();
+      document.getElementById(`${prefix}-cust`).textContent = totalAgg.cust.toLocaleString();
+      document.getElementById(`${prefix}-ord`).textContent = totalAgg.ord.toLocaleString();
+
+      let yoyEl = document.getElementById(`${prefix}-yoy`);
+      if(yoyEl) {
+          if(totalAgg.yoy !== '-') {
+              let val = Number(totalAgg.yoy);
+              if(val > 0) { yoyEl.textContent = `▲ 전년비 ${val}% 증가`; yoyEl.style.color = '#dc2626'; }
+              else if(val < 0) { yoyEl.textContent = `▼ 전년비 ${Math.abs(val)}% 감소`; yoyEl.style.color = '#2563eb'; }
+              else { yoyEl.textContent = `전년 동일`; yoyEl.style.color = '#6b7280'; }
+          } else {
+              yoyEl.textContent = '전년 데이터 없음'; yoyEl.style.color = '#6b7280';
+          }
+      }
+  }
+
+  function updateReturnDatePicker(skipRender = false) {
+      const mode = document.getElementById('returnViewMode').value;
+      const sel = document.getElementById('returnDatePicker');
+      sel.innerHTML = '';
+      if(mode === 'DAILY') {
+          const days = [...new Set(cachedData.map(d => d.DAY).filter(x => x))].sort().reverse();
+          days.forEach(d => sel.add(new Option(d, d)));
+          if(days.length > 0) sel.value = days[0];
+      } else {
+          const months = [...new Set(cachedData.map(d => d.MONTH).filter(x => x))].sort().reverse();
+          months.forEach(m => sel.add(new Option(m, m)));
+          if(months.length > 0) sel.value = months[0];
+      }
+      
+      if (!skipRender) {
+          renderReturn();
+      }
+  }
+
+  async function renderAnalysis() {
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    try {
+        let needsRebuild = false;
+        if(!cachedData) { 
+            cachedData = await getAllData(); 
+            needsRebuild = true; 
+        }
+        
+        const data = cachedData;
+        if(data.length === 0) {
+          document.getElementById('loadingOverlay').style.display = 'none';
+          return; 
+        }
+
+        if(needsRebuild) {
+            const days = [...new Set(data.map(d => d.DAY).filter(x => x))].sort().reverse();
+            const months = [...new Set(data.map(d => d.MONTH).filter(x => x))].sort().reverse();
+            const brands = [...new Set(data.map(d => d.BRAND).filter(x => x))].sort();
+
+            ['dailyDatePicker', 'bDailyDatePicker'].forEach(id => {
+                const sel = document.getElementById(id);
+                sel.innerHTML = ''; days.forEach(d => sel.add(new Option(d, d)));
+                if(days.length > 0) sel.value = days[0];
+            });
+
+            ['monthlyDatePicker', 'bMonthlyDatePicker'].forEach(id => {
+                const sel = document.getElementById(id);
+                sel.innerHTML = ''; months.forEach(m => sel.add(new Option(m, m)));
+                if(months.length > 0) sel.value = months[0];
+            });
+
+            ['bDailyBrandPicker', 'bMonthlyBrandPicker', 'returnBrandPicker'].forEach(id => {
+                const sel = document.getElementById(id);
+                sel.innerHTML = ''; 
+                if(id === 'returnBrandPicker') sel.add(new Option('전체 브랜드 (ALL)', 'ALL'));
+                brands.forEach(b => sel.add(new Option(b, b)));
+                if(brands.length > 0 && id !== 'returnBrandPicker') sel.value = brands[0];
+            });
+
+            document.getElementById('dailyDatePicker').onchange = renderDaily;
+            document.getElementById('dailySmcpFilter').onchange = renderDaily;
+            
+            document.getElementById('monthlyDatePicker').onchange = renderMonthly;
+            document.getElementById('monthlySmcpFilter').onchange = renderMonthly;
+
+            document.getElementById('bDailyDatePicker').onchange = renderBrandDaily;
+            document.getElementById('bDailyBrandPicker').onchange = renderBrandDaily;
+
+            document.getElementById('bMonthlyDatePicker').onchange = renderBrandMonthly;
+            document.getElementById('bMonthlyBrandPicker').onchange = renderBrandMonthly;
+
+            document.getElementById('returnViewMode').onchange = () => updateReturnDatePicker(false);
+            document.getElementById('returnDatePicker').onchange = renderReturn;
+            document.getElementById('returnBrandPicker').onchange = renderReturn;
+
+            updateReturnDatePicker(true); 
+        }
+
+        renderDaily();
+        renderMonthly();
+        renderBrandDaily();
+        renderBrandMonthly();
+        renderReturn();
+
+    } catch (e) {
+        console.error("렌더링 에러:", e);
+    }
+    document.getElementById('loadingOverlay').style.display = 'none';
+  }
+
+  function renderDaily() {
+      const targetDay = document.getElementById('dailyDatePicker').value;
+      const smcpFilter = document.getElementById('dailySmcpFilter').value;
+      if(!targetDay) return;
+      
+      const filteredCache = applySmcpFilter(cachedData, smcpFilter);
+      const prevYearDay = String(Number(targetDay.substr(0,4)) - 1) + targetDay.substr(4);
+      
+      const currDayData = filteredCache.filter(d => d.DAY === targetDay);
+      const prevDayData = filteredCache.filter(d => d.DAY === prevYearDay);
+
+      const totalSummary = aggregateDataWithYoY(currDayData, prevDayData, () => 'TOTAL')[0] || {sales:0, prev_sales:0, yoy:'-', qty:0, cust:0, ord:0, firstCust:0, firstCustRate:'0.0'};
+      updateKPI('d', totalSummary);
+
+      document.getElementById('d-tbl-brand').innerHTML = buildTableHTML(aggregateDataWithYoY(currDayData, prevDayData, r => r.BRAND || '기타').sort((a,b)=>b.sales-a.sales), '브랜드');
+      document.getElementById('d-tbl-channel').innerHTML = buildTableHTML(aggregateDataWithYoY(currDayData, prevDayData, r => r.PROD_ORD_CHNL || '기타').sort((a,b)=>b.sales-a.sales), '주문채널');
+      document.getElementById('d-tbl-grade').innerHTML = buildTableHTML(aggregateDataWithYoY(currDayData, prevDayData, r => r.ORD_TIME_GRD || '기타').sort((a,b)=>b.sales-a.sales), '회원등급');
+
+      const trendStartDay = getPastDateString(targetDay, 14);
+      const prevTrendStartDay = String(Number(trendStartDay.substr(0,4)) - 1) + trendStartDay.substr(4);
+      const prevTrendEndDay = String(Number(targetDay.substr(0,4)) - 1) + targetDay.substr(4);
+
+      const curr15Data = filteredCache.filter(d => d.DAY >= trendStartDay && d.DAY <= targetDay);
+      const prev15Data = filteredCache.filter(d => d.DAY >= prevTrendStartDay && d.DAY <= prevTrendEndDay);
+      
+      const trendData = aggregateDataWithYoY(curr15Data, prev15Data, r => r.DAY, r => String(Number(r.DAY.substr(0,4)) + 1) + r.DAY.substr(4));
+      trendData.sort((a, b) => b.name.localeCompare(a.name));
+      document.getElementById('d-tbl-trend').innerHTML = buildTableHTML(trendData, '일자 (최근 15일)');
+
+      const itemsData = aggregateDataWithYoY(currDayData, prevDayData, r => (r.P_CD || r.PROD_CD || 'UNKNOWN') + '||' + (r.PROD_NM || r.P_CD || r.PROD_CD || '미확인 상품'));
+      
+      const bestSalesData = [...itemsData].sort((a,b) => b.sales - a.sales).slice(0, 10);
+      document.getElementById('d-tbl-best-sales').innerHTML = buildProductTableHTML(bestSalesData, '상품명 (매출순 Top10)');
+
+      const bestQtyData = [...itemsData].sort((a,b) => b.qty - a.qty).slice(0, 10);
+      document.getElementById('d-tbl-best-qty').innerHTML = buildProductTableHTML(bestQtyData, '상품명 (수량순 Top10)');
+  }
+
+  function renderMonthly() {
+      const targetMonth = document.getElementById('monthlyDatePicker').value;
+      const smcpFilter = document.getElementById('monthlySmcpFilter').value;
+      if(!targetMonth) return;
+      
+      const filteredCache = applySmcpFilter(cachedData, smcpFilter);
+      const prevYearMonth = String(Number(targetMonth.substr(0,4)) - 1) + targetMonth.substr(4);
+      
+      const currMonthData = filteredCache.filter(d => d.MONTH === targetMonth);
+      const prevMonthData = filteredCache.filter(d => d.MONTH === prevYearMonth);
+      
+      const totalSummary = aggregateDataWithYoY(currMonthData, prevMonthData, () => 'TOTAL')[0] || {sales:0, prev_sales:0, yoy:'-', qty:0, cust:0, ord:0, firstCust:0, firstCustRate:'0.0'};
+      updateKPI('m', totalSummary);
+
+      document.getElementById('m-tbl-brand').innerHTML = buildTableHTML(aggregateDataWithYoY(currMonthData, prevMonthData, r => r.BRAND || '기타').sort((a,b)=>b.sales-a.sales), '브랜드');
+      document.getElementById('m-tbl-channel').innerHTML = buildTableHTML(aggregateDataWithYoY(currMonthData, prevMonthData, r => r.PROD_ORD_CHNL || '기타').sort((a,b)=>b.sales-a.sales), '주문채널');
+      document.getElementById('m-tbl-grade').innerHTML = buildTableHTML(aggregateDataWithYoY(currMonthData, prevMonthData, r => r.ORD_TIME_GRD || '기타').sort((a,b)=>b.sales-a.sales), '회원등급');
+
+      const trendStartMonth = getPastMonthString(targetMonth, 11);
+      const prevTrendStartMonth = String(Number(trendStartMonth.substr(0,4)) - 1) + trendStartMonth.substr(4);
+      const prevTrendEndMonth = String(Number(targetMonth.substr(0,4)) - 1) + targetMonth.substr(4);
+
+      const curr12Data = filteredCache.filter(d => d.MONTH >= trendStartMonth && d.MONTH <= targetMonth);
+      const prev12Data = filteredCache.filter(d => d.MONTH >= prevTrendStartMonth && d.MONTH <= prevTrendEndMonth);
+
+      const trendData = aggregateDataWithYoY(curr12Data, prev12Data, r => r.MONTH, r => String(Number(r.MONTH.substr(0,4)) + 1) + r.MONTH.substr(4));
+      trendData.sort((a, b) => b.name.localeCompare(a.name));
+      document.getElementById('m-tbl-trend').innerHTML = buildTableHTML(trendData, '월 (최근 12개월)');
+
+      const itemsData = aggregateDataWithYoY(currMonthData, prevMonthData, r => (r.P_CD || r.PROD_CD || 'UNKNOWN') + '||' + (r.PROD_NM || r.P_CD || r.PROD_CD || '미확인 상품'));
+      
+      const bestSalesData = [...itemsData].sort((a,b) => b.sales - a.sales).slice(0, 10);
+      document.getElementById('m-tbl-best-sales').innerHTML = buildProductTableHTML(bestSalesData, '상품명 (매출순 Top10)');
+
+      const bestQtyData = [...itemsData].sort((a,b) => b.qty - a.qty).slice(0, 10);
+      document.getElementById('m-tbl-best-qty').innerHTML = buildProductTableHTML(bestQtyData, '상품명 (수량순 Top10)');
+  }
+
+  function renderBrandDaily() {
+      const targetDay = document.getElementById('bDailyDatePicker').value;
+      const targetBrand = document.getElementById('bDailyBrandPicker').value;
+      if(!targetDay || !targetBrand) return;
+
+      const brandData = cachedData.filter(d => d.BRAND === targetBrand);
+      const prevYearDay = String(Number(targetDay.substr(0,4)) - 1) + targetDay.substr(4);
+
+      const currDayData = brandData.filter(d => d.DAY === targetDay);
+      const prevDayData = brandData.filter(d => d.DAY === prevYearDay);
+
+      const trendStartDay = getPastDateString(targetDay, 14);
+      const prevTrendStartDay = String(Number(trendStartDay.substr(0,4)) - 1) + trendStartDay.substr(4);
+      const prevTrendEndDay = String(Number(targetDay.substr(0,4)) - 1) + targetDay.substr(4);
+
+      const curr15Data = brandData.filter(d => d.DAY >= trendStartDay && d.DAY <= targetDay);
+      const prev15Data = brandData.filter(d => d.DAY >= prevTrendStartDay && d.DAY <= prevTrendEndDay);
+      const trendData = aggregateDataWithYoY(curr15Data, prev15Data, r => r.DAY, r => String(Number(r.DAY.substr(0,4)) + 1) + r.DAY.substr(4));
+      trendData.sort((a, b) => b.name.localeCompare(a.name));
+      document.getElementById('bd-tbl-trend').innerHTML = buildTableHTML(trendData, '일자 (최근 15일)');
+
+      document.getElementById('bd-tbl-channel').innerHTML = buildTableHTML(aggregateDataWithYoY(currDayData, prevDayData, r => r.PROD_ORD_CHNL || '기타').sort((a,b)=>b.sales-a.sales), '주문채널');
+      document.getElementById('bd-tbl-grade').innerHTML = buildTableHTML(aggregateDataWithYoY(currDayData, prevDayData, r => r.ORD_TIME_GRD || '기타').sort((a,b)=>b.sales-a.sales), '회원등급');
+
+      const itemsData = aggregateDataWithYoY(currDayData, prevDayData, r => (r.P_CD || r.PROD_CD || 'UNKNOWN') + '||' + (r.PROD_NM || r.P_CD || r.PROD_CD || '미확인 상품'));
+      
+      const bestSalesData = [...itemsData].sort((a,b) => b.sales - a.sales).slice(0, 10);
+      document.getElementById('bd-tbl-best-sales').innerHTML = buildProductTableHTML(bestSalesData, '상품명 (매출순 Top10)');
+
+      const bestQtyData = [...itemsData].sort((a,b) => b.qty - a.qty).slice(0, 10);
+      document.getElementById('bd-tbl-best-qty').innerHTML = buildProductTableHTML(bestQtyData, '상품명 (수량순 Top10)');
+  }
+
+  function renderBrandMonthly() {
+      const targetMonth = document.getElementById('bMonthlyDatePicker').value;
+      const targetBrand = document.getElementById('bMonthlyBrandPicker').value;
+      if(!targetMonth || !targetBrand) return;
+
+      const brandData = cachedData.filter(d => d.BRAND === targetBrand);
+      const prevYearMonth = String(Number(targetMonth.substr(0,4)) - 1) + targetMonth.substr(4);
+
+      const currMonthData = brandData.filter(d => d.MONTH === targetMonth);
+      const prevMonthData = brandData.filter(d => d.MONTH === prevYearMonth);
+
+      const trendStartMonth = getPastMonthString(targetMonth, 11);
+      const prevTrendStartMonth = String(Number(trendStartMonth.substr(0,4)) - 1) + trendStartMonth.substr(4);
+      const prevTrendEndMonth = String(Number(targetMonth.substr(0,4)) - 1) + targetMonth.substr(4);
+
+      const curr12Data = brandData.filter(d => d.MONTH >= trendStartMonth && d.MONTH <= targetMonth);
+      const prev12Data = brandData.filter(d => d.MONTH >= prevTrendStartMonth && d.MONTH <= prevTrendEndMonth);
+      const trendData = aggregateDataWithYoY(curr12Data, prev12Data, r => r.MONTH, r => String(Number(r.MONTH.substr(0,4)) + 1) + r.MONTH.substr(4));
+      trendData.sort((a, b) => b.name.localeCompare(a.name));
+      document.getElementById('bm-tbl-trend').innerHTML = buildTableHTML(trendData, '월 (최근 12개월)');
+
+      document.getElementById('bm-tbl-channel').innerHTML = buildTableHTML(aggregateDataWithYoY(currMonthData, prevMonthData, r => r.PROD_ORD_CHNL || '기타').sort((a,b)=>b.sales-a.sales), '주문채널');
+      document.getElementById('bm-tbl-grade').innerHTML = buildTableHTML(aggregateDataWithYoY(currMonthData, prevMonthData, r => r.ORD_TIME_GRD || '기타').sort((a,b)=>b.sales-a.sales), '회원등급');
+
+      const itemsData = aggregateDataWithYoY(currMonthData, prevMonthData, r => (r.P_CD || r.PROD_CD || 'UNKNOWN') + '||' + (r.PROD_NM || r.P_CD || r.PROD_CD || '미확인 상품'));
+      
+      const bestSalesData = [...itemsData].sort((a,b) => b.sales - a.sales).slice(0, 10);
+      document.getElementById('bm-tbl-best-sales').innerHTML = buildProductTableHTML(bestSalesData, '상품명 (매출순 Top10)');
+
+      const bestQtyData = [...itemsData].sort((a,b) => b.qty - a.qty).slice(0, 10);
+      document.getElementById('bm-tbl-best-qty').innerHTML = buildProductTableHTML(bestQtyData, '상품명 (수량순 Top10)');
+  }
+
+  function renderReturn() {
+      const mode = document.getElementById('returnViewMode').value;
+      const targetDate = document.getElementById('returnDatePicker').value;
+      const targetBrand = document.getElementById('returnBrandPicker').value;
+
+      if(!targetDate || !cachedData) return;
+
+      let filteredData = cachedData;
+      if (targetBrand !== 'ALL') {
+          filteredData = cachedData.filter(d => d.BRAND === targetBrand);
+      }
+
+      let currData = [];
+      let prevData = [];
+      let trendData = [];
+      let prevYearDate = '';
+
+      if(mode === 'DAILY') {
+          prevYearDate = String(Number(targetDate.substr(0,4)) - 1) + targetDate.substr(4);
+          currData = filteredData.filter(d => d.DAY === targetDate);
+          prevData = filteredData.filter(d => d.DAY === prevYearDate);
+
+          const trendStartDay = getPastDateString(targetDate, 14);
+          const prevTrendStartDay = String(Number(trendStartDay.substr(0,4)) - 1) + trendStartDay.substr(4);
+          const prevTrendEndDay = String(Number(targetDate.substr(0,4)) - 1) + targetDate.substr(4);
+
+          const curr15Data = filteredData.filter(d => d.DAY >= trendStartDay && d.DAY <= targetDate);
+          const prev15Data = filteredData.filter(d => d.DAY >= prevTrendStartDay && d.DAY <= prevTrendEndDay);
+          
+          trendData = aggregateReturnData(curr15Data, prev15Data, r => r.DAY, r => String(Number(r.DAY.substr(0,4)) + 1) + r.DAY.substr(4));
+          trendData.sort((a, b) => b.name.localeCompare(a.name));
+          
+          document.getElementById('r-tbl-trend-title').innerText = '📅 최근 15일 반품/취소 추이';
+          document.getElementById('r-tbl-trend').innerHTML = buildReturnTableHTML(trendData, '일자');
+      } else {
+          prevYearDate = String(Number(targetDate.substr(0,4)) - 1) + targetDate.substr(4);
+          currData = filteredData.filter(d => d.MONTH === targetDate);
+          prevData = filteredData.filter(d => d.MONTH === prevYearDate);
+
+          const trendStartMonth = getPastMonthString(targetDate, 11);
+          const prevTrendStartMonth = String(Number(trendStartMonth.substr(0,4)) - 1) + trendStartMonth.substr(4);
+          const prevTrendEndMonth = String(Number(targetDate.substr(0,4)) - 1) + targetDate.substr(4);
+
+          const curr12Data = filteredData.filter(d => d.MONTH >= trendStartMonth && d.MONTH <= targetDate);
+          const prev12Data = filteredData.filter(d => d.MONTH >= prevTrendStartMonth && d.MONTH <= prevTrendEndMonth);
+          
+          trendData = aggregateReturnData(curr12Data, prev12Data, r => r.MONTH, r => String(Number(r.MONTH.substr(0,4)) + 1) + r.MONTH.substr(4));
+          trendData.sort((a, b) => b.name.localeCompare(a.name));
+          
+          document.getElementById('r-tbl-trend-title').innerText = '📅 최근 12개월 반품/취소 추이';
+          document.getElementById('r-tbl-trend').innerHTML = buildReturnTableHTML(trendData, '월');
+      }
+
+      const totalSummary = aggregateReturnData(currData, prevData, () => 'TOTAL')[0] || {rfndAmt:0, prev_rfndAmt:0, yoy:'-', cnclQty:0, rtnQty:0, cust:0};
+      document.getElementById('r-amt').textContent = totalSummary.rfndAmt.toLocaleString();
+      document.getElementById('r-cncl-qty').textContent = totalSummary.cnclQty.toLocaleString();
+      document.getElementById('r-rtn-qty').textContent = totalSummary.rtnQty.toLocaleString();
+      document.getElementById('r-cust').textContent = totalSummary.cust.toLocaleString();
+
+      let yoyEl = document.getElementById('r-yoy');
+      if(totalSummary.yoy !== '-') {
+          let val = Number(totalSummary.yoy);
+          if(val > 0) { yoyEl.textContent = `▲ 전년비 ${val}% 증가`; yoyEl.style.color = '#dc2626'; }
+          else if(val < 0) { yoyEl.textContent = `▼ 전년비 ${Math.abs(val)}% 감소`; yoyEl.style.color = '#2563eb'; }
+          else { yoyEl.textContent = `전년 동일`; yoyEl.style.color = '#6b7280'; }
+      } else {
+          yoyEl.textContent = '전년 데이터 없음'; yoyEl.style.color = '#6b7280';
+      }
+
+      // [NEW] 브랜드별 반품/취소 현황 데이터 적용 (필터 조건에 따라 자동 연동)
+      const brandAggData = aggregateReturnData(currData, prevData, r => r.BRAND || '기타');
+      document.getElementById('r-tbl-brand').innerHTML = buildReturnTableHTML(brandAggData.sort((a,b) => b.rfndAmt - a.rfndAmt), '브랜드');
+
+      const itemsData = aggregateReturnData(currData, prevData, r => (r.P_CD || r.PROD_CD || 'UNKNOWN') + '||' + (r.PROD_NM || r.P_CD || r.PROD_CD || '미확인 상품'));
+      
+      const bestAmtData = [...itemsData].sort((a,b) => b.rfndAmt - a.rfndAmt).slice(0, 10);
+      document.getElementById('r-tbl-best-amt').innerHTML = buildReturnTableHTML(bestAmtData, '상품명 (금액순 Top10)', true);
+
+      const bestQtyData = [...itemsData].sort((a,b) => (b.cnclQty + b.rtnQty) - (a.cnclQty + a.rtnQty)).slice(0, 10);
+      document.getElementById('r-tbl-best-qty').innerHTML = buildReturnTableHTML(bestQtyData, '상품명 (수량 합산순 Top10)', true);
+  }
+
+  window.onload = async () => { 
+      await getDB(); 
+      await updateDBStatusUI(); 
+  };
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('서비스 워커 등록 성공!', reg))
+        .catch(err => console.log('서비스 워커 등록 실패:', err));
+    });
+  }
+</script>
+</body>
+</html>
