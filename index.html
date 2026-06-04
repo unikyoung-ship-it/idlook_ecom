@@ -1173,11 +1173,11 @@ a:hover { text-decoration: underline; }
 
 window.onload = async () => {
     try {
-        // getDB가 모듈로 분리되어 있다면 해당 모듈을 먼저 불러와야 합니다
-        const db = await initializeDatabase(); 
-        console.log("DB 초기화 성공");
+        // Supabase는 이미 초기화되었으므로, 바로 현재 DB 상태(데이터 건수)만 화면에 업데이트합니다.
+        await updateDBStatusUI();
+        console.log("Supabase 클라우드 DB 연결 및 UI 업데이트 완료");
     } catch (err) {
-        console.error("DB 초기화 실패:", err);
+        console.error("DB 상태 확인 실패:", err);
     }
 };
 </script>
