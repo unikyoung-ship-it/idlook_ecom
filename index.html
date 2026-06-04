@@ -1171,10 +1171,15 @@ a:hover { text-decoration: underline; }
       document.getElementById('r-tbl-best-qty').innerHTML = buildReturnTableHTML(bestQtyData, '상품명 (수량 합산순 Top10)', true);
   }
 
-  window.onload = async () => { 
-      await getDB(); 
-      await updateDBStatusUI(); 
-  };
+window.onload = async () => {
+    try {
+        // getDB가 모듈로 분리되어 있다면 해당 모듈을 먼저 불러와야 합니다
+        const db = await initializeDatabase(); 
+        console.log("DB 초기화 성공");
+    } catch (err) {
+        console.error("DB 초기화 실패:", err);
+    }
+};
 </script>
 <script>
   if ('serviceWorker' in navigator) {
